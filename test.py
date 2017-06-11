@@ -3,7 +3,7 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 
-from tensorflow.contrib.rnn import BasicLSTMCell, BasicRNNCell
+from tensorflow.contrib import rnn
 #from EURNN import EURNNCell
 
 def get_pixel_rep(n):   
@@ -38,10 +38,13 @@ def get_pixel_rep(n):
     return np.concatenate(list(num_gen()), axis = 1)
 
 
+"""
+    Produces a random n digit number capped at (10^n-1)//2
+"""
 def random_with_N_digits(n):
     range_start = 10**(n-1)
     range_end = (10**n)-1
-    return random.randint(range_start, range_end)
+    return random.randint(range_start, range_end//2)
 
 def generate_data(num_of_points):
  
@@ -81,8 +84,31 @@ batch_size    = 128
 n_input   = 5    #rows in image
 n_steps   = 32   #columns to read in image
 n_hidden  = 128  #hidden neurons
-n_classes = 1998 #numbered output of NN 
+n_output  = 5    #numbered output of NN 
+n_classes = 12
+
+#input for graph
+
+x = tf.placeholder("float", [None, n_input,  n_steps])
+y = tf.placeholder("float", [None, n_output, n_classes])
 
 
-
-
+def RNN(x, weights, biases, model = "RNN", capacity = 2, FFT = False, comp = False):
+    
+    #Choose model    
+    	if model == "LSTM":
+		cell = rnn.BasicLSTMCell(n_hidden, state_is_tuple=True, forget_bias=1)
+		outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
+	elif model == "RNN":
+		cell = BasicRNNCell(n_hidden)
+		outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
+	elif model == "EURNN":
+		cell = EURNNCell(n_hidden, capacity, FFT, comp)
+		if comp:
+			comp_outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.complex64)
+			outputs = tf.real(comp_outputs)
+		else:
+			outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
+            
+    #Get outputs
+    outputs, states = rnn.dynamic_rnn
