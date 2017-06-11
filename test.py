@@ -89,18 +89,18 @@ n_classes = 12
 
 #input for graph
 
-x = tf.placeholder("float", [None, n_input,  n_steps])
+x = tf.placeholder("float", [None, n_steps,  n_input])
 y = tf.placeholder("float", [None, n_output, n_classes])
 
 
 def RNN(x, weights, biases, model = "RNN", capacity = 2, FFT = False, comp = False):
     
-    #Choose model    
+    #Choose model and get outputs 
     	if model == "LSTM":
 		cell = rnn.BasicLSTMCell(n_hidden, state_is_tuple=True, forget_bias=1)
 		outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
 	elif model == "RNN":
-		cell = BasicRNNCell(n_hidden)
+		cell = rnn.BasicRNNCell(n_hidden)
 		outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
 	elif model == "EURNN":
 		cell = EURNNCell(n_hidden, capacity, FFT, comp)
@@ -110,5 +110,3 @@ def RNN(x, weights, biases, model = "RNN", capacity = 2, FFT = False, comp = Fal
 		else:
 			outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
             
-    #Get outputs
-    outputs, states = rnn.dynamic_rnn
