@@ -88,14 +88,13 @@ n_output  = 5    #numbered output of NN
 n_classes = 12
 
 #input for graph
-
-x = tf.placeholder("float", [None, n_steps,  n_input])
-y = tf.placeholder("float", [None, n_output, n_classes])
+x = tf.placeholder("tf.int32", [None, n_steps,  n_input])
+y = tf.placeholder("tf.int32", [None, n_output, n_classes])
 
 
 def RNN(x, weights, biases, model = "RNN", capacity = 2, FFT = False, comp = False):
     
-    #Choose model and get outputs 
+    #Choose cell and assign output and state   
     	if model == "LSTM":
 		cell = rnn.BasicLSTMCell(n_hidden, state_is_tuple=True, forget_bias=1)
 		outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
@@ -109,4 +108,3 @@ def RNN(x, weights, biases, model = "RNN", capacity = 2, FFT = False, comp = Fal
 			outputs = tf.real(comp_outputs)
 		else:
 			outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
-            
