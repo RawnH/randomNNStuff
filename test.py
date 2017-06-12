@@ -2,9 +2,13 @@ import tensorflow as tf
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+import os
 
 from tensorflow.contrib import rnn
 from EURNN import EURNNCell
+
+
+os.environ["CUDA_VISIBLE_DEVICES"]=""
 
 def get_pixel_rep(n):   
     
@@ -46,7 +50,8 @@ def random_with_N_digits(n):
     range_end = (10**n)-1
     return random.randint(range_start, range_end//2)
 
-def generate_data(num_of_points):
+
+def random_data(num_of_points):
  
     pluses = np.array([ get_pixel_rep("+") ]  * num_of_points)
     equals = np.array([ get_pixel_rep("=") ] * num_of_points)
@@ -74,11 +79,56 @@ def generate_data(num_of_points):
 
     return data, labels
 
+def data_gen(start, end):
+    
+    char_width = 4
+    
+    digit_length = len(str(end))
+    im_height = 5
+    im_width  = char_width * (digit_length * 2 + 2) #2 accounts for equal and plus signs
+    
+    length = (end - start)**2
+    curr_loc = 0
+    data = np.empty((length, im_height, im_width))
+    labels = np.empty(length)
+    
+    new_index = np.random.permutation(length)
+    
+    for first_num in range(start, end):
+        for sec_num in range(start, end):
+            data[new_index[curr_loc]] = get_pixel_rep(str(first_num) + "+" + str(sec_num) + "=" )
+            labels[new_index[curr_loc]] = first_num + sec_num          
+            curr_loc += 1
+    
+    return data, labels
+
+def split_into_train_and_test(data, labels, percent_train = 0.6):
+    
+    train_data_num = int(data.shape[0]*percent_train)
+    
+    train_data = data[:train_data_num]
+    train_labels = labels[:train_data_num]
+    
+    test_data  = data[train_data_num:]
+    test_labels = labels[train_data_num:]
+    
+    return train_data, train_labels, test_data, test_labels
+
+
+def gen_batches(data, labels, batch_size):
+    
+    indices = random.sample(range(data.shape[0]), batch_size)
+    
+    data_batch = data[indices, :]
+    label_batch = np.take(labels, indices)
+    
+    return data_batch, label_batch
+
 
 #Set up hyper-params
 learning_rate = 0.01
-iters         = 1000
-batch_size    = 128
+iters         = 6000
+batch_size    = 512
  
 #Set up neural-net parameters
 n_input   = 5    #rows in image
@@ -90,7 +140,7 @@ init_val = np.sqrt(6.)/np.sqrt(n_classes * 2)
 
 #input for graph
 x = tf.placeholder("float", [None, 5, 32])
-y = tf.placeholder("int32", [None])
+y = tf.placeholder("int64", [None])
 
 
 def RNN(x, model = "LSTM", capacity = 2, FFT = False, comp = False):
@@ -110,13 +160,13 @@ def RNN(x, model = "LSTM", capacity = 2, FFT = False, comp = False):
         else:
             outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
 
-
-    weights = tf.get_variable("weights", shape = [n_hidden, n_classes], \
-                dtype=tf.float32, initializer=tf.random_uniform_initializer(-1, 1))
-    
-    biases = tf.get_variable("biases", shape=[n_classes], \
-             dtype=tf.float32, initializer=tf.constant_initializer(0.01))
-
+    with tf.variable_scope("params"):
+        weights = tf.get_variable("weights", shape = [n_hidden, n_classes], \
+                    dtype=tf.float32, initializer=tf.random_uniform_initializer(-init_val, init_val))
+        
+        biases = tf.get_variable("biases", shape=[n_classes], \
+                 dtype=tf.float32, initializer=tf.constant_initializer(1) )
+        
     output_list = tf.unstack(outputs, axis=1)
     last_out = output_list[-1]
     weight_prod = tf.matmul(last_out, weights)
@@ -126,37 +176,56 @@ rnn_out = RNN(x)
 
 # --- evaluate process ----------------------
 cost = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=rnn_out, labels=y))
+correct_pred = tf.equal(tf.argmax(rnn_out, 1), y)
+accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
 
 # --- Initialization ----------------------
-optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001, decay=0.9).minimize(cost)
+optimizer = tf.train.RMSPropOptimizer(learning_rate = learning_rate, decay = 0.9).minimize(cost)
 init = tf.global_variables_initializer()
 
-
+print("Preparing data...")
+data, labels = data_gen(100, 999)
+train_data, train_labels, test_data, test_labels = split_into_train_and_test(data, labels)
+print("Data prepared.")
 
 with tf.Session() as sess:
     sess.run(init)
-    
     epochs = []
     errors = []
+    accs = []
     
-    for i in range(iters):
-        
-        batch_X, batch_Y = generate_data(batch_size) 
+    for i in range(iters):     
+        batch_X, batch_Y = gen_batches(train_data, train_labels, batch_size)
         sess.run(optimizer, feed_dict={x: batch_X, y: batch_Y})
-
         error = sess.run(cost, feed_dict={x: batch_X, y: batch_Y})
-
-        print("Epoch number: " + str(i) + ", Error = " + "{:.6f}".format(error))
-
+        acc = sess.run(accuracy, feed_dict={x: batch_X, y: batch_Y})
+        accs.append(acc)
+        
+        
+        print("Epoch number: " + str(i) + ", Error = " + "{:.6f}".format(error), \
+              "Accuracy = " + "{:.6f}".format(acc))
+        
         epochs.append(i)
         errors.append(error)
     
     print("done!")
+    
     plt.plot(epochs, errors)
     plt.xlabel = "epochs"
-    plt.ylabel = "errors"
+    plt.ylabel = "error"
     plt.show()
+    
+    plt.plot(epochs, accs)
+    plt.xlabel = "epochs"
+    plt.ylabel = "accuracy"
+    plt.show() 
+    
+    sess.run(optimizer, feed_dict={x: test_data, y: test_labels})
+    test_acc = sess.run(accuracy, feed_dict={x: test_data, y: test_labels})
+    test_loss = sess.run(cost, feed_dict={x: test_data, y: test_labels})
+    print("Test result: Loss= " + "{:.6f}".format(test_loss) + \
+          ", Accuracy= " + "{:.5f}".format(test_acc))
 
 
 

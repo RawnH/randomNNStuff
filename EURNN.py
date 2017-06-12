@@ -1,4 +1,4 @@
-from tensorflow.python.ops.rnn_cell_impl import _RNNCell as RNNCell
+from tensorflow.python.ops.rnn_cell_impl import RNNCell
 
 from EUNN import *
 
