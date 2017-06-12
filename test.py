@@ -4,7 +4,7 @@ import random
 import matplotlib.pyplot as plt
 
 from tensorflow.contrib import rnn
-#from EURNN import EURNNCell
+from EURNN import EURNNCell
 
 def get_pixel_rep(n):   
     
@@ -77,15 +77,17 @@ def generate_data(num_of_points):
 
 #Set up hyper-params
 learning_rate = 0.01
-epochs        = 10000
+epochs        = 100
 batch_size    = 128
  
 #Set up neural-net parameters
 n_input   = 5    #rows in image
 n_steps   = 32   #columns to read in image
 n_hidden  = 128  #hidden neurons
-n_output  = 5    #numbered output of NN 
-n_classes = 12
+n_output  = 12    #numbered output of NN 
+n_classes = 5
+
+init_val = np.sqrt(6.)/np.sqrt(n_classes * 2)
 
 #input for graph
 
@@ -96,17 +98,72 @@ y = tf.placeholder("float", [None, n_output, n_classes])
 def RNN(x, weights, biases, model = "RNN", capacity = 2, FFT = False, comp = False):
     
     #Choose cell and assign output and state   
-    	if model == "LSTM":
-		cell = rnn.BasicLSTMCell(n_hidden, state_is_tuple=True, forget_bias=1)
-		outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
-	elif model == "RNN":
-		cell = rnn.BasicRNNCell(n_hidden)
-		outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
-	elif model == "EURNN":
-		cell = EURNNCell(n_hidden, capacity, FFT, comp)
-		if comp:
-			comp_outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.complex64)
-			outputs = tf.real(comp_outputs)
-		else:
-			outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
+    if model == "LSTM":
+        cell = rnn.BasicLSTMCell(n_hidden, state_is_tuple=True, forget_bias=1)
+        outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
+    elif model == "RNN":
+        cell = rnn.BasicRNNCell(n_hidden)
+        outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
+    elif model == "EURNN":
+        cell = EURNNCell(n_hidden, capacity, FFT, comp)
+        if comp:
+            comp_outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.complex64)
+            outputs = tf.real(comp_outputs)
+        else:
+            outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
+    
+    
+    return ...
+
+
+weights = tf.get_variable("weights", shape = [n_hidden, n_classes], \
+                dtype=tf.float32, initializer=tf.random_uniform_initializer(-init_val, init_val))
+    
+biases = tf.get_variable("biases", shape=[n_classes], \
+             dtype=tf.float32, initializer=tf.constant_initializer(0.01))
+
+
+rnn_out = RNN(x, weights, biases)
+
+
+# --- evaluate process ----------------------
+mse = tf.reduce_mean(tf.squared_difference(y, rnn_out))
+
+
+# --- Initialization ----------------------
+optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001, decay=0.9).minimize(mse)
+init = tf.global_variables_initializer()
+
+
+
+with tf.Session() as sess:
+    sess.run(init)
+    
+    epochs = []
+    errors = []
+    
+    for i in range(epochs):
+        
+        batch_X, batch_Y = generate_data(batch_size)      
+        sess.run(optimizer, feed_dict={x: batch_X, y: batch_Y})
+
+        error = sess.run(mse, feed_dict={x: batch_X, y: batch_Y})
+
+        print("Epoch number: " + str(i) + ", Error = " + "{:.6f}".format(error))
+
+        epochs.append(i)
+        errors.append(error)
+    
+    print("done!")
+    plt.plot(epochs, errors)
+    plt.xlabel = "epochs"
+    plt.ylabel = "errors"
+    plt.show()
+
+
+
+
+
+
+    
             
