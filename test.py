@@ -1,3 +1,8 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__	import print_function
+
+
 import tensorflow as tf
 import numpy as np
 import random
@@ -136,7 +141,10 @@ def save_plot(filename, title, x_label, y_label, x_data, y_data):
     plt.clf()
     
 
-def main(model_arg = "RNN", learning_rate = 0.01, iters = 3000, batch_size = 256, n_hidden = 128, cap_arg = 2, FFT_arg = False, comp_arg = False):
+print("Preparing data...")
+data, labels = data_gen(100, 200)
+    
+def main(model_arg = "RNN", decay = 0.9, learning_rate = 0.01, iters = 3000, batch_size = 256, n_hidden = 128, cap_arg = 2, FFT_arg = False, comp_arg = False):
       
     #Set up neural-net parameters
     n_steps   = 5     #rows in image
@@ -166,7 +174,7 @@ def main(model_arg = "RNN", learning_rate = 0.01, iters = 3000, batch_size = 256
             else:
                 outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
     
-        with tf.variable_scope("params"):
+        with tf.variable_scope("params", reuse = False):
             weights = tf.get_variable("weights", shape = [n_hidden, n_classes], \
                         dtype=tf.float32, initializer=tf.random_uniform_initializer(1, 2))
             
@@ -178,8 +186,8 @@ def main(model_arg = "RNN", learning_rate = 0.01, iters = 3000, batch_size = 256
         weight_prod = tf.matmul(last_out, weights)
         return tf.nn.bias_add(weight_prod, biases)
 
-    model_description = "{} LR = {}, iters = {}, batch_size = {}, n_hidden = {}, capacity = {} FFT = {}, complex = {}"\
-                        .format(model_arg, learning_rate, iters, batch_size, n_hidden, cap_arg, FFT_arg, comp_arg)
+    model_description = "{} LR = {}, iters = {}, batch_size = {}, n_hidden = {}, capacity = {} FFT = {}, complex = {}, decay = {}"\
+                        .format(model_arg, learning_rate, iters, batch_size, n_hidden, cap_arg, FFT_arg, comp_arg, decay)
 
     title             = "{} LR = {}, iters = {}, batch_size = {}, n_hidden = {}"\
                         .format(model_arg, learning_rate, iters, batch_size, n_hidden)
@@ -193,11 +201,9 @@ def main(model_arg = "RNN", learning_rate = 0.01, iters = 3000, batch_size = 256
     
     
     # --- Initialization ----------------------
-    optimizer = tf.train.RMSPropOptimizer(learning_rate = learning_rate, decay = 0.9).minimize(cost)
+    optimizer = tf.train.RMSPropOptimizer(learning_rate = learning_rate, decay = decay).minimize(cost)
     init = tf.global_variables_initializer()
     
-    print("Preparing data...")
-    data, labels = data_gen(100, 200)
     train_data, train_labels, test_data, test_labels = split_into_train_and_test(data, labels)
     
     epochs = []
@@ -232,45 +238,64 @@ def main(model_arg = "RNN", learning_rate = 0.01, iters = 3000, batch_size = 256
         test_acc = sess.run(accuracy, feed_dict={x: test_data, y: test_labels})
         test_loss = sess.run(cost, feed_dict={x: test_data, y: test_labels})
         
-        print(model_description)
-        print("Test result: Loss= " + "{:.6f}".format(test_loss) + \
-              ", Accuracy= " + "{:.5f}".format(test_acc))
+        info = model_description + "\nTest result: Loss= " + "{:.6f}".format(test_loss) + \
+              ", Accuracy = " + "{:.5f}".format(test_acc) + "\n\n"
+              
+        print(info)
+        with open("model_info.txt", 'a+') as f:
+            f.write(info)
 
 
-if __name__=="__main__":
-    parser = argparse.ArgumentParser(
-        description="Addition task")
-    parser.add_argument("model", default='LSTM', help="Model name: LSTM, EURNN")
-    parser.add_argument('--n_iter', '-I', type=int, default=300, help='training iteration number')
-    parser.add_argument('--learning_rate', '-N', type = float, default=0.01, help = 'learning rate of network')
-    parser.add_argument('--n_batch', '-B', type=int, default=128, help='batch size')
-    parser.add_argument('--n_hidden', '-H', type=int, default=128, help='hidden layer size')
-    parser.add_argument('--capacity', '-L', type=int, default=2, help='Tunable style capacity, only for EURNN, default value is 2')
-    parser.add_argument('--comp', '-C', type=str, default="False", help='Complex domain or Real domain. Default is False: real domain')
-    parser.add_argument('--FFT', '-F', type=str, default="False", help='FFT style, only for EURNN, default is False')
+#if __name__=="__main__":
+#    parser = argparse.ArgumentParser(
+#        description="Addition task")
+#    parser.add_argument("model", default='LSTM', help="Model name: LSTM, EURNN")
+#    parser.add_argument('--n_iter', '-I', type=int, default=300, help='training iteration number')
+#    parser.add_argument('--learning_rate', '-N', type = float, default=0.01, help = 'learning rate of network')
+#    parser.add_argument('--n_batch', '-B', type=int, default=128, help='batch size')
+#    parser.add_argument('--n_hidden', '-H', type=int, default=128, help='hidden layer size')
+#    parser.add_argument('--capacity', '-L', type=int, default=2, help='Tunable style capacity, only for EURNN, default value is 2')
+#    parser.add_argument('--comp', '-C', type=str, default="False", help='Complex domain or Real domain. Default is False: real domain')
+#    parser.add_argument('--FFT', '-F', type=str, default="False", help='FFT style, only for EURNN, default is False')
+#
+#    args = parser.parse_args()
+#    arg_dict = vars(args)
+#
+#    for i in arg_dict:
+#        if (arg_dict[i]=="False"):
+#            arg_dict[i] = False
+#        elif arg_dict[i]=="True":
+#            arg_dict[i] = True
+#        
+#    kwargs = {    
+#                'model_arg': arg_dict['model'],
+#                'learning_rate': arg_dict['learning_rate'],
+#                'iters': arg_dict['n_iter'],
+#                  'batch_size': arg_dict['n_batch'],
+#                  'n_hidden': arg_dict['n_hidden'],
+#                  'cap_arg': arg_dict['capacity'],
+#                  'comp_arg': arg_dict['comp'],
+#                  'FFT_arg': arg_dict['FFT'],
+#            }
+#
+#    main(**kwargs)
 
-    args = parser.parse_args()
-    arg_dict = vars(args)
+models = ["RNN", "LSTM", "EURNN"]
+loops = [1000, 3000, 5000]
+batches = [128,256, 512]
+learning_rates = [0.0001, 0.001, 0.01, 0.1, 1]
+decay = [0.1, 0.5, 0.9]
+n_hidden = [128, 256]
 
-    for i in arg_dict:
-        if (arg_dict[i]=="False"):
-            arg_dict[i] = False
-        elif arg_dict[i]=="True":
-            arg_dict[i] = True
-        
-    kwargs = {    
-                'model_arg': arg_dict['model'],
-                'learning_rate': arg_dict['learning_rate'],
-                'iters': arg_dict['n_iter'],
-                  'batch_size': arg_dict['n_batch'],
-                  'n_hidden': arg_dict['n_hidden'],
-                  'cap_arg': arg_dict['capacity'],
-                  'comp_arg': arg_dict['comp'],
-                  'FFT_arg': arg_dict['FFT'],
-            }
-
-    main(**kwargs)
-
+for model in models:
+    for loop in loops:
+        for batch in batches:
+            for neta in learning_rates:
+                for de in decay:
+                    for hidden in n_hidden:
+                        main(model_arg = model, decay = de, learning_rate = neta, iters = loop, n_hidden = hidden, batch_size=batch)
+                        tf.reset_default_graph()
+                    
 
 
     
