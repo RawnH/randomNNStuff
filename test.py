@@ -1,14 +1,20 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__	import print_function
+
+
 import tensorflow as tf
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+import argparse
 import os
 
 from tensorflow.contrib import rnn
 from EURNN import EURNNCell
 
 
-os.environ["CUDA_VISIBLE_DEVICES"]=""
+os.environ["CUDA_VISIBLE_DEVICES"]="" #not enough gpu memory to test
 
 def get_pixel_rep(n):   
     
@@ -117,14 +123,25 @@ def split_into_train_and_test(data, labels, percent_train = 0.6):
 
 def gen_batches(data, labels, batch_size):
     
-    indices = random.sample(range(data.shape[0]), batch_size)
-    
+    indices = random.sample(range(data.shape[0]), batch_size)  
     data_batch = data[indices, :]
     label_batch = np.take(labels, indices)
     
     return data_batch, label_batch
 
+def save_plot(filename, title, x_label, y_label, x_data, y_data):
+    
+    
+    plt.plot(x_data, y_data)
+    plt.xlabel = x_label
+    plt.ylabel = y_label
+    plt.title(title)   
+    plt.tight_layout()
+    plt.savefig(filename, format = "png")
+    plt.clf()
+    
 
+<<<<<<< HEAD
 #Set up hyper-params
 learning_rate = 0.01
 iters         = 6000
@@ -159,75 +176,163 @@ def RNN(x, model = "RNN", capacity = 2, FFT = False, comp = False):
             outputs = tf.real(comp_outputs)
         else:
             outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
-
-    with tf.variable_scope("params"):
-        weights = tf.get_variable("weights", shape = [n_hidden, n_classes], \
-                    dtype=tf.float32, initializer=tf.random_uniform_initializer(-init_val, init_val))
-        
-        biases = tf.get_variable("biases", shape=[n_classes], \
-                 dtype=tf.float32, initializer=tf.constant_initializer(1) )
-        
-    output_list = tf.unstack(outputs, axis=1)
-    last_out = output_list[-1]
-    weight_prod = tf.matmul(last_out, weights)
-    return tf.nn.bias_add(weight_prod, biases)
-
-rnn_out = RNN(x)
-
-# --- evaluate process ----------------------
-cost = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=rnn_out, labels=y))
-correct_pred = tf.equal(tf.argmax(rnn_out, 1), y)
-accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-
-
-# --- Initialization ----------------------
-optimizer = tf.train.RMSPropOptimizer(learning_rate = learning_rate, decay = 0.9).minimize(cost)
-init = tf.global_variables_initializer()
-
+=======
 print("Preparing data...")
-data, labels = data_gen(100, 999)
-train_data, train_labels, test_data, test_labels = split_into_train_and_test(data, labels)
-print("Data prepared.")
+data, labels = data_gen(100, 200)
+    
+def main(model_arg = "RNN", decay = 0.9, learning_rate = 0.01, iters = 3000, batch_size = 256, n_hidden = 128, cap_arg = 2, FFT_arg = False, comp_arg = False):
+      
+    #Set up neural-net parameters
+    n_steps   = 5     #rows in image
+    n_input   = 32    #columns to read in image
+    n_classes = 2000  #possible outputs
+    
+    #init_val = np.sqrt(6.)/np.sqrt(n_classes * 2)
+    
+    #input for graph
+    x = tf.placeholder("float", [None, n_steps, n_input])
+    y = tf.placeholder("int64", [None])
+>>>>>>> 35e4a3ebe95ac1e100e8df144631ca5809db30b8
 
-with tf.Session() as sess:
-    sess.run(init)
+    def RNN(x, model = model_arg, capacity = cap_arg, FFT = FFT_arg, comp = comp_arg):
+        
+        #Choose cell and assign output and state   
+        if model == "LSTM":
+            cell = rnn.BasicLSTMCell(n_hidden, state_is_tuple=True, forget_bias=1)
+            outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
+        elif model == "RNN":
+            cell = rnn.BasicRNNCell(n_hidden)
+            outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
+        elif model == "EURNN":
+            cell = EURNNCell(n_hidden, capacity, FFT, comp)
+            if comp:
+                comp_outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.complex64)
+                outputs = tf.real(comp_outputs)
+            else:
+                outputs, states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
+    
+        with tf.variable_scope("params", reuse = False):
+            weights = tf.get_variable("weights", shape = [n_hidden, n_classes], \
+                        dtype=tf.float32, initializer=tf.random_uniform_initializer(1, 2))
+            
+            biases = tf.get_variable("biases", shape=[n_classes], \
+                     dtype=tf.float32, initializer=tf.constant_initializer(1) )
+            
+        output_list = tf.unstack(outputs, axis=1)
+        last_out = output_list[-1]
+        weight_prod = tf.matmul(last_out, weights)
+        return tf.nn.bias_add(weight_prod, biases)
+
+    model_description = "{} LR = {}, iters = {}, batch_size = {}, n_hidden = {}, capacity = {} FFT = {}, complex = {}, decay = {}"\
+                        .format(model_arg, learning_rate, iters, batch_size, n_hidden, cap_arg, FFT_arg, comp_arg, decay)
+
+    title             = "{} LR = {}, iters = {}, batch_size = {}, n_hidden = {}"\
+                        .format(model_arg, learning_rate, iters, batch_size, n_hidden)
+    
+    rnn_out = RNN(x)
+    
+    # --- evaluate process ----------------------
+    cost = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=rnn_out, labels=y))
+    correct_pred = tf.equal(tf.argmax(rnn_out, 1), y)
+    accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+    
+    
+    # --- Initialization ----------------------
+    optimizer = tf.train.RMSPropOptimizer(learning_rate = learning_rate, decay = decay).minimize(cost)
+    init = tf.global_variables_initializer()
+    
+    train_data, train_labels, test_data, test_labels = split_into_train_and_test(data, labels)
+    
     epochs = []
     errors = []
     accs = []
     
-    for i in range(iters):     
-        batch_X, batch_Y = gen_batches(train_data, train_labels, batch_size)
-        sess.run(optimizer, feed_dict={x: batch_X, y: batch_Y})
-        error = sess.run(cost, feed_dict={x: batch_X, y: batch_Y})
-        acc = sess.run(accuracy, feed_dict={x: batch_X, y: batch_Y})
-        accs.append(acc)
+    with tf.Session() as sess:
+        sess.run(init)
         
+        for i in range(iters):     
+            batch_X, batch_Y = gen_batches(train_data, train_labels, batch_size)
+            sess.run(optimizer, feed_dict={x: batch_X, y: batch_Y})
+            error = sess.run(cost, feed_dict={x: batch_X, y: batch_Y})
+            acc = sess.run(accuracy, feed_dict={x: batch_X, y: batch_Y})
+            accs.append(acc)
+            
+            
+            #print("Epoch number: " + str(i) + ", Error = " + "{:.6f}".format(error), \
+            #     "Accuracy = " + "{:.6f}".format(acc))
+            
+            epochs.append(i)
+            errors.append(error)
         
-        print("Epoch number: " + str(i) + ", Error = " + "{:.6f}".format(error), \
-              "Accuracy = " + "{:.6f}".format(acc))
+        print("done!")
         
-        epochs.append(i)
-        errors.append(error)
     
-    print("done!")
-    
-    plt.plot(epochs, errors)
-    plt.xlabel = "epochs"
-    plt.ylabel = "error"
-    plt.show()
-    
-    plt.plot(epochs, accs)
-    plt.xlabel = "epochs"
-    plt.ylabel = "accuracy"
-    plt.show() 
-    
-    sess.run(optimizer, feed_dict={x: test_data, y: test_labels})
-    test_acc = sess.run(accuracy, feed_dict={x: test_data, y: test_labels})
-    test_loss = sess.run(cost, feed_dict={x: test_data, y: test_labels})
-    print("Test result: Loss= " + "{:.6f}".format(test_loss) + \
-          ", Accuracy= " + "{:.5f}".format(test_acc))
+        save_plot("Error " + model_description, title, "Epoch Number", "Error", epochs, errors)
+        save_plot("Accuracy" + model_description, title, "Epoch Number", "Accuracy", epochs, accs)
+
+        
+        sess.run(optimizer, feed_dict={x: test_data, y: test_labels})
+        test_acc = sess.run(accuracy, feed_dict={x: test_data, y: test_labels})
+        test_loss = sess.run(cost, feed_dict={x: test_data, y: test_labels})
+        
+        info = model_description + "\nTest result: Loss= " + "{:.6f}".format(test_loss) + \
+              ", Accuracy = " + "{:.5f}".format(test_acc) + "\n\n"
+              
+        print(info)
+        with open("model_info.txt", 'a+') as f:
+            f.write(info)
 
 
+#if __name__=="__main__":
+#    parser = argparse.ArgumentParser(
+#        description="Addition task")
+#    parser.add_argument("model", default='LSTM', help="Model name: LSTM, EURNN")
+#    parser.add_argument('--n_iter', '-I', type=int, default=300, help='training iteration number')
+#    parser.add_argument('--learning_rate', '-N', type = float, default=0.01, help = 'learning rate of network')
+#    parser.add_argument('--n_batch', '-B', type=int, default=128, help='batch size')
+#    parser.add_argument('--n_hidden', '-H', type=int, default=128, help='hidden layer size')
+#    parser.add_argument('--capacity', '-L', type=int, default=2, help='Tunable style capacity, only for EURNN, default value is 2')
+#    parser.add_argument('--comp', '-C', type=str, default="False", help='Complex domain or Real domain. Default is False: real domain')
+#    parser.add_argument('--FFT', '-F', type=str, default="False", help='FFT style, only for EURNN, default is False')
+#
+#    args = parser.parse_args()
+#    arg_dict = vars(args)
+#
+#    for i in arg_dict:
+#        if (arg_dict[i]=="False"):
+#            arg_dict[i] = False
+#        elif arg_dict[i]=="True":
+#            arg_dict[i] = True
+#        
+#    kwargs = {    
+#                'model_arg': arg_dict['model'],
+#                'learning_rate': arg_dict['learning_rate'],
+#                'iters': arg_dict['n_iter'],
+#                  'batch_size': arg_dict['n_batch'],
+#                  'n_hidden': arg_dict['n_hidden'],
+#                  'cap_arg': arg_dict['capacity'],
+#                  'comp_arg': arg_dict['comp'],
+#                  'FFT_arg': arg_dict['FFT'],
+#            }
+#
+#    main(**kwargs)
+
+models = ["RNN", "LSTM", "EURNN"]
+loops = [1000, 3000, 5000]
+batches = [128,256, 512]
+learning_rates = [0.0001, 0.001, 0.01, 0.1, 1]
+decay = [0.1, 0.5, 0.9]
+n_hidden = [128, 256]
+
+for model in models:
+    for loop in loops:
+        for batch in batches:
+            for neta in learning_rates:
+                for de in decay:
+                    for hidden in n_hidden:
+                        main(model_arg = model, decay = de, learning_rate = neta, iters = loop, n_hidden = hidden, batch_size=batch)
+                        tf.reset_default_graph()
+                    
 
 
     
