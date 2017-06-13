@@ -143,7 +143,7 @@ x = tf.placeholder("float", [None, 5, 32])
 y = tf.placeholder("int64", [None])
 
 
-def RNN(x, model = "LSTM", capacity = 2, FFT = False, comp = False):
+def RNN(x, model = "RNN", capacity = 2, FFT = False, comp = False):
     
     #Choose cell and assign output and state   
     if model == "LSTM":
